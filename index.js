@@ -29,7 +29,7 @@ app.get("/api/asistente/:idRestaurante", async (req, res) => {
   console.log(`🚀 Iniciando asistente para restaurante: ${id}`);
 
   try {
-    // 🧠 Chromium liviano para Railway
+    // 🧠 Obtener el ejecutable de Chromium para Railway
     const browserPath = await chromium.executablePath();
     if (!browserPath) {
       throw new Error("No se pudo obtener el path de Chromium en Railway.");
@@ -41,8 +41,16 @@ app.get("/api/asistente/:idRestaurante", async (req, res) => {
         session: id,
         headless: true,
         pathNameToken: pathTokens,
-        browserArgs: chromium.args,
-        executablePath: browserPath,
+        executablePath: browserPath, // ✅ Usa el Chromium de @sparticuz
+        browserArgs: [
+          ...chromium.args,
+          "--no-sandbox",
+          "--disable-setuid-sandbox",
+          "--disable-dev-shm-usage",
+          "--disable-gpu",
+          "--single-process",
+          "--no-zygote",
+        ],
         disableWelcome: true,
         catchQR: (base64Qr) => {
           console.log(`📱 QR generado para ${id}`);
@@ -78,7 +86,10 @@ function iniciarBot(client, id) {
       if (texto.includes("hola")) {
         await client.sendText(message.from, `👋 Hola! Soy el asistente de ${id}.`);
       } else if (texto.includes("facturó") || texto.includes("facturo")) {
-        await client.sendText(message.from, "📊 Hoy se facturó $52.300 (ejemplo de prueba).");
+        await client.sendText(
+          message.from,
+          "📊 Hoy se facturó $52.300 (ejemplo de prueba)."
+        );
       } else if (texto.includes("ayuda")) {
         await client.sendText(
           message.from,
