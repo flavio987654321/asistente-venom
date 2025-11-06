@@ -29,19 +29,21 @@ app.get("/api/asistente/:idRestaurante", async (req, res) => {
   console.log(`🚀 Iniciando asistente para restaurante: ${id}`);
 
   try {
-    // 🧠 Obtener el ejecutable de Chromium para Railway
+    // 🧠 Obtener la ruta del Chromium liviano
     const browserPath = await chromium.executablePath();
     if (!browserPath) {
       throw new Error("No se pudo obtener el path de Chromium en Railway.");
     }
 
-    // ⚙️ Crear sesión WPPConnect con Chromium liviano
+    // ⚙️ Crear sesión WPPConnect con Chromium liviano (Railway)
     wppconnect
       .create({
         session: id,
         headless: true,
         pathNameToken: pathTokens,
-        executablePath: browserPath, // ✅ Usa el Chromium de @sparticuz
+        useChrome: true, // ✅ fuerza el uso de Chromium
+        executablePath: browserPath, // ✅ usa /tmp/chromium de @sparticuz
+        puppeteerOptions: { executablePath: browserPath }, // ✅ doble seguridad
         browserArgs: [
           ...chromium.args,
           "--no-sandbox",
