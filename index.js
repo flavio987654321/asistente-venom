@@ -23,14 +23,19 @@ app.get("/api/asistente/:idRestaurante", async (req, res) => {
   const id = req.params.idRestaurante;
   const pathTokens = `./bots/${id}`;
 
+  // 🗂️ Crear carpeta para tokens si no existe
   if (!fs.existsSync(pathTokens)) fs.mkdirSync(pathTokens, { recursive: true });
 
   console.log(`🚀 Iniciando asistente para restaurante: ${id}`);
 
   try {
-    // 🧠 Crear sesión usando Chromium liviano (en lugar de Chrome)
+    // 🧠 Chromium liviano para Railway
     const browserPath = await chromium.executablePath();
+    if (!browserPath) {
+      throw new Error("No se pudo obtener el path de Chromium en Railway.");
+    }
 
+    // ⚙️ Crear sesión WPPConnect con Chromium liviano
     wppconnect
       .create({
         session: id,
@@ -38,17 +43,19 @@ app.get("/api/asistente/:idRestaurante", async (req, res) => {
         pathNameToken: pathTokens,
         browserArgs: chromium.args,
         executablePath: browserPath,
+        disableWelcome: true,
         catchQR: (base64Qr) => {
+          console.log(`📱 QR generado para ${id}`);
           res.json({ estado: "qr", qr: base64Qr });
         },
         statusFind: (status) => {
-          console.log(`📶 [${id}] Estado:`, status);
+          console.log(`📶 [${id}] Estado: ${status}`);
         },
       })
       .then((client) => iniciarBot(client, id))
       .catch((err) => {
         console.error(`❌ Error creando bot ${id}:`, err);
-        res.json({ estado: "error", error: err.message });
+        res.status(500).json({ estado: "error", error: err.message });
       });
   } catch (err) {
     console.error("❌ Error general en el asistente:", err);
@@ -63,27 +70,28 @@ function iniciarBot(client, id) {
   console.log(`✅ Bot iniciado correctamente para restaurante ${id}`);
 
   client.onMessage(async (message) => {
-    if (message.isGroupMsg || message.fromMe) return;
+    try {
+      if (message.isGroupMsg || message.fromMe) return;
 
-    const texto = (message.body || "").toLowerCase();
+      const texto = (message.body || "").toLowerCase();
 
-    if (texto.includes("hola")) {
-      await client.sendText(message.from, `👋 Hola! Soy el asistente de ${id}.`);
-    } else if (texto.includes("facturó") || texto.includes("facturo")) {
-      await client.sendText(
-        message.from,
-        "📊 Hoy se facturó $52.300 (ejemplo de prueba)."
-      );
-    } else if (texto.includes("ayuda")) {
-      await client.sendText(
-        message.from,
-        "🤖 Comandos disponibles:\n• hola\n• facturó\n• ayuda"
-      );
-    } else {
-      await client.sendText(
-        message.from,
-        "🤖 No entiendo ese comando todavía. Escribí *hola* o *facturó*."
-      );
+      if (texto.includes("hola")) {
+        await client.sendText(message.from, `👋 Hola! Soy el asistente de ${id}.`);
+      } else if (texto.includes("facturó") || texto.includes("facturo")) {
+        await client.sendText(message.from, "📊 Hoy se facturó $52.300 (ejemplo de prueba).");
+      } else if (texto.includes("ayuda")) {
+        await client.sendText(
+          message.from,
+          "🤖 Comandos disponibles:\n• hola\n• facturó\n• ayuda"
+        );
+      } else {
+        await client.sendText(
+          message.from,
+          "🤖 No entiendo ese comando todavía. Escribí *hola* o *facturó*."
+        );
+      }
+    } catch (err) {
+      console.error(`⚠️ Error procesando mensaje en ${id}:`, err);
     }
   });
 }
