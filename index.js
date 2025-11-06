@@ -35,6 +35,16 @@ app.get("/api/asistente/:idRestaurante", async (req, res) => {
       throw new Error("No se pudo obtener el path de Chromium en Railway.");
     }
 
+    // 🧹 Borrar tokens anteriores si existen (evita conflicto de sesión)
+if (fs.existsSync(pathTokens)) {
+  try {
+    fs.rmSync(pathTokens, { recursive: true, force: true });
+    console.log(`🧽 Tokens antiguos de ${id} eliminados correctamente`);
+  } catch (err) {
+    console.warn(`⚠️ No se pudieron borrar los tokens de ${id}:`, err.message);
+  }
+}
+
     // ⚙️ Crear sesión WPPConnect con Chromium liviano (Railway)
     wppconnect
       .create({
