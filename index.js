@@ -97,6 +97,26 @@ function iniciarBot(client, id) {
 }
 
 // =======================================================
+// 🧪 TEST: Verificar si Chromium funciona en Railway
+// =======================================================
+app.get("/test-chromium", async (req, res) => {
+  try {
+    const path = await chromium.executablePath();
+    res.json({
+      estado: "ok",
+      path,
+      argsCount: chromium.args.length,
+      headless: chromium.headless,
+    });
+  } catch (err) {
+    res.status(500).json({
+      estado: "error",
+      error: err.message,
+    });
+  }
+});
+
+// =======================================================
 // 🚀 Servidor Express activo
 // =======================================================
 app.listen(PORT, "0.0.0.0", () => {
