@@ -1,0 +1,14 @@
+{
+  "name": "asistente-miqr",
+  "version": "1.0.0",
+  "description": "Servidor del asistente virtual MiQR para dueños de restaurantes",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "@wppconnect-team/wppconnect": "^1.37.5",
+    "express": "^4.18.2"
+  }
+}

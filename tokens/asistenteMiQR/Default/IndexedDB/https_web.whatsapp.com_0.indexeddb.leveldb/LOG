@@ -1,0 +1,21 @@
+2025/11/05-18:29:43.331 1d9c Reusing MANIFEST C:\Users\SoI Legoas\OneDrive\Desktop\asistente-venom\tokens\asistenteMiQR\Default\IndexedDB\https_web.whatsapp.com_0.indexeddb.leveldb/MANIFEST-000001
+2025/11/05-18:29:43.334 1d9c Recovering log #256
+2025/11/05-18:29:43.366 1d9c Reusing old log C:\Users\SoI Legoas\OneDrive\Desktop\asistente-venom\tokens\asistenteMiQR\Default\IndexedDB\https_web.whatsapp.com_0.indexeddb.leveldb/000256.log 
+2025/11/05-18:29:43.368 1d9c Delete type=2 #254
+2025/11/05-18:29:46.299 5a0 Level-0 table #261: started
+2025/11/05-18:29:46.316 5a0 Level-0 table #261: 208358 bytes OK
+2025/11/05-18:29:46.319 5a0 Delete type=0 #256
+2025/11/05-18:29:46.324 5a0 Manual compaction at level-0 from '\x00a\x00\x00\x00' @ 72057594037927935 : 1 .. '\x00b\x00\x00\x00' @ 0 : 0; will stop at '\x00a\x00\x00\x05' @ 326164 : 1
+2025/11/05-18:29:46.324 5a0 Compacting 1@0 + 1@1 files
+2025/11/05-18:29:46.478 5a0 Generated table #262@0: 70283 keys, 1430494 bytes
+2025/11/05-18:29:46.478 5a0 Compacted 1@0 + 1@1 files => 1430494 bytes
+2025/11/05-18:29:46.480 5a0 compacted to: files[ 0 1 1 0 0 0 0 ]
+2025/11/05-18:29:46.481 5a0 Delete type=2 #261
+2025/11/05-18:29:46.485 5a0 Manual compaction at level-0 from '\x00a\x00\x00\x05' @ 326164 : 1 .. '\x00b\x00\x00\x00' @ 0 : 0; will stop at (end)
+2025/11/05-20:37:40.200 5a0 Compacting 1@1 + 1@2 files
+2025/11/05-20:37:40.275 5a0 Generated table #263@1: 25700 keys, 1064751 bytes
+2025/11/05-20:37:40.275 5a0 Compacted 1@1 + 1@2 files => 1064751 bytes
+2025/11/05-20:37:40.277 5a0 compacted to: files[ 0 0 1 0 0 0 0 ]
+2025/11/05-20:37:40.279 5a0 Delete type=2 #177
+2025/11/05-20:37:40.281 5a0 Delete type=2 #258
+2025/11/05-20:37:40.281 5a0 Delete type=2 #262
