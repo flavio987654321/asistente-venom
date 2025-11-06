@@ -7,8 +7,11 @@ import fs from "fs";
 import cors from "cors";
 
 const app = express();
-const PORT = 3000;
+const PORT = process.env.PORT || 3000; // ✅ Puerto dinámico para Railway
 
+// =======================================================
+// 🌐 Configuración general
+// =======================================================
 app.use(cors());
 app.use(express.static("public"));
 
@@ -21,30 +24,47 @@ app.get("/api/asistente/:idRestaurante", async (req, res) => {
 
   if (!fs.existsSync(pathTokens)) fs.mkdirSync(pathTokens, { recursive: true });
 
-  wppconnect
-    .create({
-      session: id,
-      headless: true,
-      pathNameToken: pathTokens,
-      catchQR: (base64Qr) => {
-        res.json({ estado: "qr", qr: base64Qr });
-      },
-      statusFind: (status) => {
-        console.log(`📶 [${id}] Estado:`, status);
-      },
-    })
-    .then((client) => iniciarBot(client, id))
-    .catch((err) => {
-      console.error(`❌ Error creando bot ${id}:`, err);
-      res.json({ estado: "error", error: err.message });
-    });
+  console.log(`🚀 Iniciando asistente para restaurante: ${id}`);
+
+  try {
+    wppconnect
+      .create({
+        session: id,
+        headless: true,
+        pathNameToken: pathTokens,
+        browserArgs: [
+          "--no-sandbox",
+          "--disable-setuid-sandbox",
+          "--disable-dev-shm-usage",
+          "--disable-accelerated-2d-canvas",
+          "--no-first-run",
+          "--no-zygote",
+          "--single-process",
+          "--disable-gpu"
+        ],
+        catchQR: (base64Qr) => {
+          res.json({ estado: "qr", qr: base64Qr });
+        },
+        statusFind: (status) => {
+          console.log(`📶 [${id}] Estado:`, status);
+        },
+      })
+      .then((client) => iniciarBot(client, id))
+      .catch((err) => {
+        console.error(`❌ Error creando bot ${id}:`, err);
+        res.json({ estado: "error", error: err.message });
+      });
+  } catch (err) {
+    console.error("❌ Error general en el asistente:", err);
+    res.status(500).json({ estado: "error", error: err.message });
+  }
 });
 
 // =======================================================
 // 🧠 Lógica principal del bot
 // =======================================================
 function iniciarBot(client, id) {
-  console.log(`✅ Bot iniciado para restaurante ${id}`);
+  console.log(`✅ Bot iniciado correctamente para restaurante ${id}`);
 
   client.onMessage(async (message) => {
     if (message.isGroupMsg || message.fromMe) return;
@@ -75,6 +95,6 @@ function iniciarBot(client, id) {
 // =======================================================
 // 🚀 Servidor Express activo
 // =======================================================
-app.listen(PORT, () => {
-  console.log(`🌐 Servidor MiQR Asistente en http://localhost:${PORT}`);
+app.listen(PORT, "0.0.0.0", () => {
+  console.log(`🌐 Servidor MiQR Asistente corriendo en el puerto ${PORT}`);
 });
