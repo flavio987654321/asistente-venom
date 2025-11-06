@@ -1,13 +1,14 @@
 // =======================================================
-// 🤖 Asistente Virtual MiQR - Servidor multiusuario
+// 🤖 Asistente Virtual MiQR - Servidor multiusuario (Railway compatible)
 // =======================================================
 import express from "express";
 import wppconnect from "@wppconnect-team/wppconnect";
 import fs from "fs";
 import cors from "cors";
+import chromium from "@sparticuz/chromium"; // ✅ Chromium liviano para Railway
 
 const app = express();
-const PORT = process.env.PORT || 3000; // ✅ Puerto dinámico para Railway
+const PORT = process.env.PORT || 3000;
 
 // =======================================================
 // 🌐 Configuración general
@@ -27,21 +28,16 @@ app.get("/api/asistente/:idRestaurante", async (req, res) => {
   console.log(`🚀 Iniciando asistente para restaurante: ${id}`);
 
   try {
+    // 🧠 Crear sesión usando Chromium liviano (en lugar de Chrome)
+    const browserPath = await chromium.executablePath();
+
     wppconnect
       .create({
         session: id,
         headless: true,
         pathNameToken: pathTokens,
-        browserArgs: [
-          "--no-sandbox",
-          "--disable-setuid-sandbox",
-          "--disable-dev-shm-usage",
-          "--disable-accelerated-2d-canvas",
-          "--no-first-run",
-          "--no-zygote",
-          "--single-process",
-          "--disable-gpu"
-        ],
+        browserArgs: chromium.args,
+        executablePath: browserPath,
         catchQR: (base64Qr) => {
           res.json({ estado: "qr", qr: base64Qr });
         },
