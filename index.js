@@ -1,15 +1,15 @@
 // =======================================================
 // 🤖 Asistente Virtual MiQR - Servidor multiusuario
 // =======================================================
-
 import express from "express";
 import wppconnect from "@wppconnect-team/wppconnect";
 import fs from "fs";
+import cors from "cors";
 
 const app = express();
 const PORT = 3000;
 
-// Servir carpeta /public
+app.use(cors());
 app.use(express.static("public"));
 
 // =======================================================
