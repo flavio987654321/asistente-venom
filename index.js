@@ -15,15 +15,32 @@ const PORT = process.env.PORT || 3000;
 // =======================================================
 // 🔥 Integración con Firebase (usa el mismo proyecto QR DreamCar)
 // =======================================================
-// ⚠️ Necesitás agregar en Railway las variables:
-// FIREBASE_CLIENT_EMAIL y FIREBASE_PRIVATE_KEY
-const decodedKey = Buffer.from(process.env.FIREBASE_PRIVATE_KEY_BASE64, "base64").toString("utf8");
+// ⚠️ Variables necesarias en Railway:
+// FIREBASE_CLIENT_EMAIL
+// FIREBASE_PRIVATE_KEY_BASE64
+
+let decodedKey = "";
+
+try {
+  const base64Key = process.env.FIREBASE_PRIVATE_KEY_BASE64 || "";
+  if (!base64Key) {
+    console.error("❌ No se encontró FIREBASE_PRIVATE_KEY_BASE64 en Railway.");
+  } else {
+    decodedKey = Buffer.from(base64Key, "base64").toString("utf8");
+    console.log("✅ Clave Firebase decodificada correctamente.");
+  }
+} catch (err) {
+  console.error("❌ Error al decodificar la clave Firebase:", err);
+  decodedKey = "";
+}
 
 initializeApp({
   credential: cert({
     projectId: "qrdreamcar-nuevo",
     clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-    privateKey: decodedKey.replace(/\\n/g, "\n"),
+    privateKey: decodedKey.includes("PRIVATE KEY")
+      ? decodedKey.replace(/\\n/g, "\n")
+      : undefined,
   }),
 });
 
@@ -154,8 +171,21 @@ function iniciarBot(client, id) {
 }
 
 // =======================================================
-// 🧪 TEST: Verificar si Chromium funciona en Railway
+// 🧪 TEST: Verificar si Firebase y Chromium funcionan en Railway
 // =======================================================
+app.get("/test-firebase", async (req, res) => {
+  try {
+    const testDoc = db.collection(COLECCION).doc("test-railway");
+    await testDoc.set({
+      ok: true,
+      timestamp: new Date().toISOString(),
+    });
+    res.json({ estado: "ok", mensaje: "Conectado a Firestore correctamente ✅" });
+  } catch (err) {
+    res.status(500).json({ estado: "error", error: err.message });
+  }
+});
+
 app.get("/test-chromium", async (req, res) => {
   try {
     const path = await chromium.executablePath();
