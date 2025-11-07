@@ -59,6 +59,13 @@ app.get("/api/asistente/:idRestaurante", async (req, res) => {
   // 🗂️ Crear carpeta para tokens si no existe
   if (!fs.existsSync(pathTokens)) fs.mkdirSync(pathTokens, { recursive: true });
 
+  // Si ya existe una sesión activa, no generar un QR nuevo
+if (fs.existsSync(`${pathTokens}/session.data.json`)) {
+  console.log(`🟢 Asistente ${id} ya está logueado.`);
+  res.json({ estado: "logueado" });
+  return;
+}
+
   console.log(`🚀 Iniciando asistente para restaurante: ${id}`);
 
   try {
@@ -73,6 +80,7 @@ app.get("/api/asistente/:idRestaurante", async (req, res) => {
       .create({
         session: id,
         headless: true,
+        autoClose: false, // 👈 evita que se cierre el proceso
         pathNameToken: pathTokens,
         useChrome: true,
         executablePath: browserPath,
