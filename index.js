@@ -1,14 +1,32 @@
 // =======================================================
-// 🤖 Asistente Virtual MiQR - Servidor multiusuario (Railway compatible)
+// 🤖 Asistente Virtual MiQR - Servidor multiusuario (Railway + Firebase)
 // =======================================================
 import express from "express";
 import wppconnect from "@wppconnect-team/wppconnect";
 import fs from "fs";
 import cors from "cors";
 import chromium from "@sparticuz/chromium"; // ✅ Chromium liviano para Railway
+import { initializeApp, cert } from "firebase-admin/app";
+import { getFirestore } from "firebase-admin/firestore";
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+
+// =======================================================
+// 🔥 Integración con Firebase (usa el mismo proyecto QR DreamCar)
+// =======================================================
+// ⚠️ Necesitás agregar en Railway las variables:
+// FIREBASE_CLIENT_EMAIL y FIREBASE_PRIVATE_KEY
+initializeApp({
+  credential: cert({
+    projectId: "qrdreamcar-nuevo",
+    clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
+    privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, "\n"),
+  }),
+});
+
+const db = getFirestore();
+const COLECCION = "asistentes_virtuales";
 
 // =======================================================
 // 🌐 Configuración general
@@ -35,25 +53,15 @@ app.get("/api/asistente/:idRestaurante", async (req, res) => {
       throw new Error("No se pudo obtener el path de Chromium en Railway.");
     }
 
-    // 🧹 Borrar tokens anteriores si existen (evita conflicto de sesión)
-if (fs.existsSync(pathTokens)) {
-  try {
-    fs.rmSync(pathTokens, { recursive: true, force: true });
-    console.log(`🧽 Tokens antiguos de ${id} eliminados correctamente`);
-  } catch (err) {
-    console.warn(`⚠️ No se pudieron borrar los tokens de ${id}:`, err.message);
-  }
-}
-
     // ⚙️ Crear sesión WPPConnect con Chromium liviano (Railway)
     wppconnect
       .create({
         session: id,
         headless: true,
         pathNameToken: pathTokens,
-        useChrome: true, // ✅ fuerza el uso de Chromium
-        executablePath: browserPath, // ✅ usa /tmp/chromium de @sparticuz
-        puppeteerOptions: { executablePath: browserPath }, // ✅ doble seguridad
+        useChrome: true,
+        executablePath: browserPath,
+        puppeteerOptions: { executablePath: browserPath },
         browserArgs: [
           ...chromium.args,
           "--no-sandbox",
@@ -72,7 +80,31 @@ if (fs.existsSync(pathTokens)) {
           console.log(`📶 [${id}] Estado: ${status}`);
         },
       })
-      .then((client) => iniciarBot(client, id))
+      .then(async (client) => {
+        console.log(`✅ Bot iniciado correctamente para restaurante ${id}`);
+
+        // 🧾 Guardar número del asistente en Firestore
+        try {
+          const info = await client.getHostDevice();
+          const numero = info?.id?.user || "desconocido";
+
+          await db.collection(COLECCION).doc(id).set(
+            {
+              idRestaurante: id,
+              numero,
+              conectado: true,
+              ultimaConexion: new Date().toISOString(),
+            },
+            { merge: true }
+          );
+
+          console.log(`📦 Asistente ${id} registrado en Firebase (${numero})`);
+        } catch (err) {
+          console.warn(`⚠️ No se pudo guardar en Firebase:`, err.message);
+        }
+
+        iniciarBot(client, id);
+      })
       .catch((err) => {
         console.error(`❌ Error creando bot ${id}:`, err);
         res.status(500).json({ estado: "error", error: err.message });
