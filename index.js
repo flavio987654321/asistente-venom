@@ -19,30 +19,26 @@ const PORT = process.env.PORT || 3000;
 // FIREBASE_CLIENT_EMAIL
 // FIREBASE_PRIVATE_KEY_BASE64
 
-let decodedKey = "";
-
 try {
-  const base64Key = process.env.FIREBASE_PRIVATE_KEY_BASE64 || "";
-  if (!base64Key) {
-    console.error("❌ No se encontró FIREBASE_PRIVATE_KEY_BASE64 en Railway.");
-  } else {
-    decodedKey = Buffer.from(base64Key, "base64").toString("utf8");
-    console.log("✅ Clave Firebase decodificada correctamente.");
-  }
-} catch (err) {
-  console.error("❌ Error al decodificar la clave Firebase:", err);
-  decodedKey = "";
-}
+  const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
+  const privateKey = process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, "\n");
 
-initializeApp({
-  credential: cert({
-    projectId: "qrdreamcar-nuevo",
-    clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-    privateKey: decodedKey.includes("PRIVATE KEY")
-      ? decodedKey.replace(/\\n/g, "\n")
-      : undefined,
-  }),
-});
+  if (!clientEmail || !privateKey) {
+    throw new Error("Faltan variables FIREBASE_CLIENT_EMAIL o FIREBASE_PRIVATE_KEY");
+  }
+
+  initializeApp({
+    credential: cert({
+      projectId: "qrdreamcar-nuevo",
+      clientEmail,
+      privateKey,
+    }),
+  });
+
+  console.log("✅ Firebase inicializado correctamente");
+} catch (err) {
+  console.error("❌ Error al inicializar Firebase:", err);
+}
 
 const db = getFirestore();
 const COLECCION = "asistentes_virtuales";
