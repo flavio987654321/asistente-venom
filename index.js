@@ -17,11 +17,13 @@ const PORT = process.env.PORT || 3000;
 // =======================================================
 // ⚠️ Necesitás agregar en Railway las variables:
 // FIREBASE_CLIENT_EMAIL y FIREBASE_PRIVATE_KEY
+const decodedKey = Buffer.from(process.env.FIREBASE_PRIVATE_KEY_BASE64, "base64").toString("utf8");
+
 initializeApp({
   credential: cert({
     projectId: "qrdreamcar-nuevo",
     clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-    privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, "\n"),
+    privateKey: decodedKey.replace(/\\n/g, "\n"),
   }),
 });
 
