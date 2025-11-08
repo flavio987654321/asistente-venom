@@ -208,21 +208,22 @@ function iniciarBot(client, id) {
         return;
       }
 
-      // === 3️⃣ MESAS OCUPADAS ===
-      if (texto.includes("mesa") && texto.includes("ocup")) {
-        const mesas = await db.collection("mesas_restaurante")
-          .where("menuId", "==", id)
-          .where("estado", "==", "OCUPADA")
-          .get();
+     // === 3️⃣ MESAS OCUPADAS ===
+if (texto.includes("mesa") && texto.includes("ocup")) {
+  const mesas = await db.collection("mesas_restaurante")
+    .where("menuId", "==", id)
+    .where("estado", "in", ["OCUPADA", "ocupada"])
+    .get();
 
-        await client.sendText(
-          message.from,
-          mesas.empty
-            ? "🍽️ No hay mesas ocupadas en este momento."
-            : `🍽️ Hay *${mesas.size}* mesas ocupadas ahora mismo.`
-        );
-        return;
-      }
+  await client.sendText(
+    message.from,
+    mesas.empty
+      ? "🍽️ No hay mesas ocupadas en este momento."
+      : `🍽️ Hay *${mesas.size}* mesas ocupadas ahora mismo.`
+  );
+  return;
+}
+
 
       // === 4️⃣ PEDIDOS ACTIVOS ===
       if (texto.includes("pedido") && texto.includes("activo")) {
