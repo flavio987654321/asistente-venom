@@ -139,7 +139,7 @@ if (fs.existsSync(`${pathTokens}/session.data.json`)) {
 });
 
 // =======================================================
-// 🧠 Lógica principal del bot
+// 🧠 Lógica principal del bot (versión mejorada con datos reales)
 // =======================================================
 function iniciarBot(client, id) {
   console.log(`✅ Bot iniciado correctamente para restaurante ${id}`);
@@ -148,28 +148,154 @@ function iniciarBot(client, id) {
     try {
       if (message.isGroupMsg || message.fromMe) return;
 
-      const texto = (message.body || "").toLowerCase();
+      const texto = (message.body || "").toLowerCase().trim();
 
+      // === SALUDO ===
       if (texto.includes("hola")) {
-        await client.sendText(message.from, `👋 Hola! Soy el asistente de ${id}.`);
-      } else if (texto.includes("facturó") || texto.includes("facturo")) {
-        await client.sendText(
-          message.from,
-          "📊 Hoy se facturó $52.300 (ejemplo de prueba)."
-        );
-      } else if (texto.includes("ayuda")) {
-        await client.sendText(
-          message.from,
-          "🤖 Comandos disponibles:\n• hola\n• facturó\n• ayuda"
-        );
-      } else {
-        await client.sendText(
-          message.from,
-          "🤖 No entiendo ese comando todavía. Escribí *hola* o *facturó*."
-        );
+        await client.sendText(message.from, `👋 Hola! Soy el asistente virtual de ${id}.`);
+        return;
       }
+
+      // === 1️⃣ FACTURACIÓN DE HOY ===
+      if (texto.includes("factur") && texto.includes("hoy")) {
+        const hoy = new Date();
+        hoy.setHours(0, 0, 0, 0);
+        const mañana = new Date(hoy);
+        mañana.setDate(mañana.getDate() + 1);
+
+        const pedidos = await db.collection("pedidos_restaurante")
+          .where("idMenu", "==", id)
+          .where("estado", "==", "pagado")
+          .where("finalizado", ">=", hoy)
+          .where("finalizado", "<", mañana)
+          .get();
+
+        let total = 0;
+        pedidos.forEach((doc) => total += doc.data().total || 0);
+
+        await client.sendText(
+          message.from,
+          pedidos.empty
+            ? "📊 No hay ventas registradas hoy."
+            : `📊 Facturación de hoy: *$${total.toLocaleString("es-AR")}* (${pedidos.size} pedidos)`
+        );
+        return;
+      }
+
+      // === 2️⃣ FACTURACIÓN DE AYER ===
+      if (texto.includes("factur") && texto.includes("ayer")) {
+        const hoy = new Date();
+        hoy.setHours(0, 0, 0, 0);
+        const ayer = new Date(hoy);
+        ayer.setDate(ayer.getDate() - 1);
+
+        const pedidos = await db.collection("pedidos_restaurante")
+          .where("idMenu", "==", id)
+          .where("estado", "==", "pagado")
+          .where("finalizado", ">=", ayer)
+          .where("finalizado", "<", hoy)
+          .get();
+
+        let total = 0;
+        pedidos.forEach((doc) => total += doc.data().total || 0);
+
+        await client.sendText(
+          message.from,
+          pedidos.empty
+            ? "📉 No hubo ventas registradas ayer."
+            : `📉 Facturación de ayer: *$${total.toLocaleString("es-AR")}* (${pedidos.size} pedidos)`
+        );
+        return;
+      }
+
+      // === 3️⃣ MESAS OCUPADAS ===
+      if (texto.includes("mesa") && texto.includes("ocup")) {
+        const mesas = await db.collection("mesas_restaurante")
+          .where("menuId", "==", id)
+          .where("estado", "==", "OCUPADA")
+          .get();
+
+        await client.sendText(
+          message.from,
+          mesas.empty
+            ? "🍽️ No hay mesas ocupadas en este momento."
+            : `🍽️ Hay *${mesas.size}* mesas ocupadas ahora mismo.`
+        );
+        return;
+      }
+
+      // === 4️⃣ PEDIDOS ACTIVOS ===
+      if (texto.includes("pedido") && texto.includes("activo")) {
+        const activos = await db.collection("pedidos_restaurante")
+          .where("idMenu", "==", id)
+          .where("estado", "==", "activo")
+          .get();
+
+        await client.sendText(
+          message.from,
+          activos.empty
+            ? "🕓 No hay pedidos activos en este momento."
+            : `🕓 Hay *${activos.size}* pedidos activos.`
+        );
+        return;
+      }
+
+      // === 5️⃣ MEJOR MOZO DEL DÍA ===
+      if (texto.includes("mejor") && texto.includes("mozo")) {
+        const hoy = new Date();
+        hoy.setHours(0, 0, 0, 0);
+        const mañana = new Date(hoy);
+        mañana.setDate(mañana.getDate() + 1);
+
+        const pedidos = await db.collection("pedidos_restaurante")
+          .where("idMenu", "==", id)
+          .where("estado", "==", "pagado")
+          .where("finalizado", ">=", hoy)
+          .where("finalizado", "<", mañana)
+          .get();
+
+        const conteo = {};
+        pedidos.forEach((doc) => {
+          const mozo = doc.data().nombreMozo || "Sin nombre";
+          conteo[mozo] = (conteo[mozo] || 0) + (doc.data().total || 0);
+        });
+
+        if (!Object.keys(conteo).length) {
+          await client.sendText(message.from, "👤 No hay mozos con ventas registradas hoy.");
+          return;
+        }
+
+        const [mejor, monto] = Object.entries(conteo).sort((a, b) => b[1] - a[1])[0];
+        await client.sendText(
+          message.from,
+          `🏆 El mejor mozo de hoy es *${mejor}* con ventas por *$${monto.toLocaleString("es-AR")}*.`
+        );
+        return;
+      }
+
+      // === AYUDA / MENÚ DE COMANDOS ===
+      if (texto.includes("ayuda")) {
+        await client.sendText(
+          message.from,
+          "🤖 Puedo responder a estos comandos:\n\n" +
+          "• facturó hoy\n" +
+          "• facturó ayer\n" +
+          "• mesas ocupadas\n" +
+          "• pedidos activos\n" +
+          "• mejor mozo\n"
+        );
+        return;
+      }
+
+      // === POR DEFECTO ===
+      await client.sendText(
+        message.from,
+        "🤖 No entiendo ese comando todavía. Escribí *ayuda* para ver opciones disponibles."
+      );
+
     } catch (err) {
       console.error(`⚠️ Error procesando mensaje en ${id}:`, err);
+      await client.sendText(message.from, "⚠️ Ocurrió un error procesando la consulta.");
     }
   });
 }
