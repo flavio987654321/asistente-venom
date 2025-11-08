@@ -79,8 +79,9 @@ if (fs.existsSync(`${pathTokens}/session.data.json`) || fs.existsSync(`${pathTok
        .create({
         session: id,
         headless: true,
-        autoClose: true,       // 👈 cierra cualquier navegador previo
-        restartOnCrash: true,  // 👈 reinicia la sesión si hay un bloqueo
+        autoClose: false,      // ✅ mantiene el QR abierto hasta que escanees
+        restartOnCrash: true,  // ✅ reinicia si se bloquea
+                              // 👈 reinicia la sesión si hay un bloqueo
         pathNameToken: pathTokens,
         useChrome: true,
         executablePath: browserPath,
@@ -350,6 +351,22 @@ app.get("/api/reiniciar/:id", async (req, res) => {
     }
   } catch (err) {
     console.error("❌ Error eliminando sesión:", err);
+    res.status(500).json({ estado: "error", error: err.message });
+  }
+});
+
+// =======================================================
+// 🧹 Forzar limpieza completa (cuando el QR no se genera o se corrompe)
+// =======================================================
+app.get("/api/forzar-reinicio/:id", async (req, res) => {
+  const id = req.params.id;
+  const pathTokens = `./bots/${id}`;
+  try {
+    fs.rmSync(pathTokens, { recursive: true, force: true });
+    console.log(`🧹 Carpeta de sesión eliminada: ${pathTokens}`);
+    res.json({ estado: "ok", mensaje: `Sesión ${id} eliminada completamente.` });
+  } catch (err) {
+    console.error("❌ Error eliminando carpeta:", err);
     res.status(500).json({ estado: "error", error: err.message });
   }
 });
