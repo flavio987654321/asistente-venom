@@ -59,11 +59,10 @@ app.get("/api/asistente/:idRestaurante", async (req, res) => {
   // 🗂️ Crear carpeta para tokens si no existe
   if (!fs.existsSync(pathTokens)) fs.mkdirSync(pathTokens, { recursive: true });
 
-  // Si ya existe una sesión activa, no generar un QR nuevo
-if (fs.existsSync(`${pathTokens}/session.data.json`)) {
-  console.log(`🟢 Asistente ${id} ya está logueado.`);
-  res.json({ estado: "logueado" });
-  return;
+// 🧠 Control avanzado de sesión
+if (fs.existsSync(`${pathTokens}/session.data.json`) || fs.existsSync(`${pathTokens}/Default`)) {
+  console.log(`⚠️ Sesión ${id} ya detectada. Evitando navegador duplicado.`);
+  return res.json({ estado: "logueado" });
 }
 
   console.log(`🚀 Iniciando asistente para restaurante: ${id}`);
@@ -76,11 +75,12 @@ if (fs.existsSync(`${pathTokens}/session.data.json`)) {
     }
 
     // ⚙️ Crear sesión WPPConnect con Chromium liviano (Railway)
-    wppconnect
-      .create({
+      wppconnect
+       .create({
         session: id,
         headless: true,
-        autoClose: false, // 👈 evita que se cierre el proceso
+        autoClose: true,       // 👈 cierra cualquier navegador previo
+        restartOnCrash: true,  // 👈 reinicia la sesión si hay un bloqueo
         pathNameToken: pathTokens,
         useChrome: true,
         executablePath: browserPath,
@@ -331,6 +331,26 @@ app.get("/test-chromium", async (req, res) => {
       estado: "error",
       error: err.message,
     });
+  }
+});
+
+// =======================================================
+// 🧹 Endpoint para eliminar sesión de un restaurante
+// =======================================================
+app.get("/api/reiniciar/:id", async (req, res) => {
+  const id = req.params.id;
+  const pathTokens = `./bots/${id}`;
+  try {
+    if (fs.existsSync(pathTokens)) {
+      fs.rmSync(pathTokens, { recursive: true, force: true });
+      console.log(`🧹 Sesión ${id} eliminada correctamente.`);
+      res.json({ estado: "ok", mensaje: `Sesión ${id} eliminada correctamente.` });
+    } else {
+      res.json({ estado: "ok", mensaje: `No existía sesión para ${id}.` });
+    }
+  } catch (err) {
+    console.error("❌ Error eliminando sesión:", err);
+    res.status(500).json({ estado: "error", error: err.message });
   }
 });
 
