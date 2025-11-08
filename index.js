@@ -139,9 +139,6 @@ if (fs.existsSync(`${pathTokens}/session.data.json`) || fs.existsSync(`${pathTok
   }
 });
 
-// =======================================================
-// 🧠 Lógica principal del bot (versión mejorada con datos reales)
-// =======================================================
 function iniciarBot(client, id) {
   console.log(`✅ Bot iniciado correctamente para restaurante ${id}`);
 
@@ -157,6 +154,36 @@ function iniciarBot(client, id) {
         return;
       }
 
+      // Función auxiliar para buscar por idMenu, menuId o idRestaurante
+      async function buscarPedidosPorEstadoYFecha(estado, desde, hasta) {
+        const pedidosRef = db.collection("pedidos_restaurante");
+        let pedidos = await pedidosRef
+          .where("idMenu", "==", id)
+          .where("estado", "==", estado)
+          .where("finalizado", ">=", desde)
+          .where("finalizado", "<", hasta)
+          .get();
+
+        if (pedidos.empty) {
+          pedidos = await pedidosRef
+            .where("menuId", "==", id)
+            .where("estado", "==", estado)
+            .where("finalizado", ">=", desde)
+            .where("finalizado", "<", hasta)
+            .get();
+        }
+        if (pedidos.empty) {
+          pedidos = await pedidosRef
+            .where("idRestaurante", "==", id)
+            .where("estado", "==", estado)
+            .where("finalizado", ">=", desde)
+            .where("finalizado", "<", hasta)
+            .get();
+        }
+
+        return pedidos;
+      }
+
       // === 1️⃣ FACTURACIÓN DE HOY ===
       if (texto.includes("factur") && texto.includes("hoy")) {
         const hoy = new Date();
@@ -164,12 +191,7 @@ function iniciarBot(client, id) {
         const mañana = new Date(hoy);
         mañana.setDate(mañana.getDate() + 1);
 
-        const pedidos = await db.collection("pedidos_restaurante")
-          .where("idMenu", "==", id)
-          .where("estado", "==", "pagado")
-          .where("finalizado", ">=", hoy)
-          .where("finalizado", "<", mañana)
-          .get();
+        const pedidos = await buscarPedidosPorEstadoYFecha("pagado", hoy, mañana);
 
         let total = 0;
         pedidos.forEach((doc) => total += doc.data().total || 0);
@@ -190,12 +212,7 @@ function iniciarBot(client, id) {
         const ayer = new Date(hoy);
         ayer.setDate(ayer.getDate() - 1);
 
-        const pedidos = await db.collection("pedidos_restaurante")
-          .where("idMenu", "==", id)
-          .where("estado", "==", "pagado")
-          .where("finalizado", ">=", ayer)
-          .where("finalizado", "<", hoy)
-          .get();
+        const pedidos = await buscarPedidosPorEstadoYFecha("pagado", ayer, hoy);
 
         let total = 0;
         pedidos.forEach((doc) => total += doc.data().total || 0);
@@ -209,29 +226,56 @@ function iniciarBot(client, id) {
         return;
       }
 
-     // === 3️⃣ MESAS OCUPADAS ===
-if (texto.includes("mesa") && texto.includes("ocup")) {
-  const mesas = await db.collection("mesas_restaurante")
-    .where("menuId", "==", id)
-    .where("estado", "in", ["OCUPADA", "ocupada"])
-    .get();
+      // === 3️⃣ MESAS OCUPADAS ===
+      if (texto.includes("mesa") && texto.includes("ocup")) {
+        const mesasRef = db.collection("mesas_restaurante");
+        let mesas = await mesasRef
+          .where("menuId", "==", id)
+          .where("estado", "in", ["OCUPADA", "ocupada"])
+          .get();
 
-  await client.sendText(
-    message.from,
-    mesas.empty
-      ? "🍽️ No hay mesas ocupadas en este momento."
-      : `🍽️ Hay *${mesas.size}* mesas ocupadas ahora mismo.`
-  );
-  return;
-}
+        if (mesas.empty) {
+          mesas = await mesasRef
+            .where("idMenu", "==", id)
+            .where("estado", "in", ["OCUPADA", "ocupada"])
+            .get();
+        }
+        if (mesas.empty) {
+          mesas = await mesasRef
+            .where("idRestaurante", "==", id)
+            .where("estado", "in", ["OCUPADA", "ocupada"])
+            .get();
+        }
 
+        await client.sendText(
+          message.from,
+          mesas.empty
+            ? "🍽️ No hay mesas ocupadas en este momento."
+            : `🍽️ Hay *${mesas.size}* mesas ocupadas ahora mismo.`
+        );
+        return;
+      }
 
       // === 4️⃣ PEDIDOS ACTIVOS ===
       if (texto.includes("pedido") && texto.includes("activo")) {
-        const activos = await db.collection("pedidos_restaurante")
+        const pedidosRef = db.collection("pedidos_restaurante");
+        let activos = await pedidosRef
           .where("idMenu", "==", id)
           .where("estado", "==", "activo")
           .get();
+
+        if (activos.empty) {
+          activos = await pedidosRef
+            .where("menuId", "==", id)
+            .where("estado", "==", "activo")
+            .get();
+        }
+        if (activos.empty) {
+          activos = await pedidosRef
+            .where("idRestaurante", "==", id)
+            .where("estado", "==", "activo")
+            .get();
+        }
 
         await client.sendText(
           message.from,
@@ -242,40 +286,7 @@ if (texto.includes("mesa") && texto.includes("ocup")) {
         return;
       }
 
-      // === 5️⃣ MEJOR MOZO DEL DÍA ===
-      if (texto.includes("mejor") && texto.includes("mozo")) {
-        const hoy = new Date();
-        hoy.setHours(0, 0, 0, 0);
-        const mañana = new Date(hoy);
-        mañana.setDate(mañana.getDate() + 1);
-
-        const pedidos = await db.collection("pedidos_restaurante")
-          .where("idMenu", "==", id)
-          .where("estado", "==", "pagado")
-          .where("finalizado", ">=", hoy)
-          .where("finalizado", "<", mañana)
-          .get();
-
-        const conteo = {};
-        pedidos.forEach((doc) => {
-          const mozo = doc.data().nombreMozo || "Sin nombre";
-          conteo[mozo] = (conteo[mozo] || 0) + (doc.data().total || 0);
-        });
-
-        if (!Object.keys(conteo).length) {
-          await client.sendText(message.from, "👤 No hay mozos con ventas registradas hoy.");
-          return;
-        }
-
-        const [mejor, monto] = Object.entries(conteo).sort((a, b) => b[1] - a[1])[0];
-        await client.sendText(
-          message.from,
-          `🏆 El mejor mozo de hoy es *${mejor}* con ventas por *$${monto.toLocaleString("es-AR")}*.`
-        );
-        return;
-      }
-
-      // === AYUDA / MENÚ DE COMANDOS ===
+      // === 5️⃣ AYUDA ===
       if (texto.includes("ayuda")) {
         await client.sendText(
           message.from,
@@ -283,13 +294,12 @@ if (texto.includes("mesa") && texto.includes("ocup")) {
           "• facturó hoy\n" +
           "• facturó ayer\n" +
           "• mesas ocupadas\n" +
-          "• pedidos activos\n" +
-          "• mejor mozo\n"
+          "• pedidos activos"
         );
         return;
       }
 
-      // === POR DEFECTO ===
+      // === DEFAULT ===
       await client.sendText(
         message.from,
         "🤖 No entiendo ese comando todavía. Escribí *ayuda* para ver opciones disponibles."
