@@ -264,67 +264,75 @@ function iniciarBot(client, id) {
       }
 
       // =======================================================
-      // 🔁 RESPUESTAS A/B (UNIFICADO SEGÚN CONTEXTO)
+      // 🔁 RESPUESTAS A/B SECTORIZADAS POR CONTEXTO
       // =======================================================
       if (["a", "b", "si", "sí", "no"].includes(texto)) {
         const contexto = estadoConversacion.get(message.from);
         if (!contexto) return;
 
-        // 🔹 FACTURACIÓN HOY
-        if (contexto.tipo === "facturacionHoy") {
-          if (texto.startsWith("a") || texto.startsWith("s")) {
-            let respuesta = "👨‍🍳 *Detalle de ventas por mozo:*\n";
-            for (const [mozo, monto] of Object.entries(contexto.porMozo)) {
-              respuesta += `• ${mozo}: $${monto.toLocaleString("es-AR")}\n`;
-            }
-            respuesta += `\n💰 *Total general:* $${contexto.total.toLocaleString("es-AR")}\n`;
-            await client.sendText(
-              message.from,
-              respuesta + "\n✅ Escribí *menu* para volver al inicio."
-            );
-          } else {
-            await client.sendText(
-              message.from,
-              "👌 Perfecto. Si querés volver al menú principal, escribí *menu*."
-            );
-          }
-          estadoConversacion.delete(message.from);
-          return;
-        }
-
-        // 🔹 MESAS OCUPADAS
-        if (contexto.tipo === "mesasOcupadas") {
-          if (texto.startsWith("a") || texto.startsWith("s")) {
-            let respuesta = "📋 *Detalle de mesas actualmente ocupadas:*\n\n";
-            contexto.datos.forEach((m) => {
-              let tiempo = "";
-              if (m.hora?.seconds) {
-                const minutos = Math.floor(
-                  (Date.now() - new Date(m.hora.seconds * 1000)) / 60000
-                );
-                const horas = Math.floor(minutos / 60);
-                const minRest = minutos % 60;
-                tiempo =
-                  horas > 0
-                    ? ` (hace ${horas}h ${minRest}min)`
-                    : ` (hace ${minRest} min)`;
+        switch (contexto.tipo) {
+          // 🔹 FACTURACIÓN HOY
+          case "facturacionHoy":
+            if (texto.startsWith("a") || texto.startsWith("s")) {
+              let respuesta = "👨‍🍳 *Detalle de ventas por mozo:*\n";
+              for (const [mozo, monto] of Object.entries(contexto.porMozo)) {
+                respuesta += `• ${mozo}: $${monto.toLocaleString("es-AR")}\n`;
               }
-              respuesta += `• 🪑 Mesa ${m.mesa} — *${m.mozo}*${tiempo}\n`;
-            });
+              respuesta += `\n💰 *Total general:* $${contexto.total.toLocaleString("es-AR")}\n`;
+              await client.sendText(
+                message.from,
+                respuesta + "\n✅ Escribí *menu* para volver al inicio."
+              );
+            } else {
+              await client.sendText(
+                message.from,
+                "👌 Perfecto. Escribí *menu* para volver al inicio."
+              );
+            }
+            estadoConversacion.delete(message.from);
+            break;
+
+          // 🔹 MESAS OCUPADAS
+          case "mesasOcupadas":
+            if (texto.startsWith("a") || texto.startsWith("s")) {
+              let respuesta = "📋 *Detalle de mesas actualmente ocupadas:*\n\n";
+              contexto.datos.forEach((m) => {
+                let tiempo = "";
+                if (m.hora?.seconds) {
+                  const minutos = Math.floor(
+                    (Date.now() - new Date(m.hora.seconds * 1000)) / 60000
+                  );
+                  const horas = Math.floor(minutos / 60);
+                  const minRest = minutos % 60;
+                  tiempo =
+                    horas > 0
+                      ? ` (hace ${horas}h ${minRest}min)`
+                      : ` (hace ${minRest} min)`;
+                }
+                respuesta += `• 🪑 Mesa ${m.mesa} — *${m.mozo}*${tiempo}\n`;
+              });
+              await client.sendText(
+                message.from,
+                respuesta + "\n✅ Escribí *menu* para volver al inicio."
+              );
+            } else {
+              await client.sendText(
+                message.from,
+                "👌 Perfecto. Escribí *menu* para volver al inicio."
+              );
+            }
+            estadoConversacion.delete(message.from);
+            break;
+
+          default:
             await client.sendText(
               message.from,
-              respuesta +
-                "\n📊 Si querés, puedo mostrarte también *qué mozo facturó más hoy*.\n\nA – Mostrar ranking de mozos\nB – Volver al menú principal"
+              "🤖 No entiendo esa opción. Escribí *menu* para volver al inicio."
             );
-          } else {
-            await client.sendText(
-              message.from,
-              "✅ Perfecto. Si querés volver al menú principal, escribí *menu*."
-            );
-          }
-          estadoConversacion.delete(message.from);
-          return;
+            estadoConversacion.delete(message.from);
+            break;
         }
+        return;
       }
 
       // =======================================================
