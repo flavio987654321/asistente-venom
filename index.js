@@ -161,16 +161,18 @@ function iniciarBot(client, id) {
         } catch (e) {
           console.warn("⚠️ No se pudo obtener el nombre:", e.message);
         }
-      await client.sendText(
-  message.from,
-  `👋 ¡Hola! Soy el asistente virtual de *${nombreRestaurante}*.\n` +
-    "Puedo brindarte información actualizada del restaurante:\n\n" +
-    "A – 📊 Facturación del día\n" +
-    "B – 🕓 Pedidos activos\n" +
-    "C – 🍽️ Mesas ocupadas\n" +
-    "D – 👨‍🍳 Mozos y rendimiento\n\n" +
-    "Escribí la *letra* o el *nombre del comando* para continuar."
-);
+
+        await client.sendText(
+          message.from,
+          `👋 ¡Hola! Soy el asistente virtual de *${nombreRestaurante}*.\n` +
+            "Puedo brindarte información actualizada del restaurante:\n\n" +
+            "A – 📊 Facturación del día\n" +
+            "B – 🕓 Pedidos activos\n" +
+            "C – 🍽️ Mesas ocupadas\n" +
+            "D – 👨‍🍳 Mozos y rendimiento\n\n" +
+            "Escribí la *letra* o el *nombre del comando* para continuar."
+        );
+        estadoConversacion.delete(message.from);
         return;
       }
 
@@ -223,33 +225,6 @@ function iniciarBot(client, id) {
       }
 
       // =======================================================
-      // 🔁 RESPUESTA A – FACTURACIÓN DETALLE
-      // =======================================================
-      if (["a", "b", "si", "sí", "no"].includes(texto)) {
-        const contexto = estadoConversacion.get(message.from);
-        if (contexto?.tipo === "facturacionHoy") {
-          if (texto.startsWith("a") || texto.startsWith("s")) {
-            let respuesta = "👨‍🍳 *Detalle de ventas por mozo:*\n";
-            for (const [mozo, monto] of Object.entries(contexto.porMozo)) {
-              respuesta += `• ${mozo}: $${monto.toLocaleString("es-AR")}\n`;
-            }
-            respuesta += `\n💰 *Total general:* $${contexto.total.toLocaleString("es-AR")}\n`;
-            await client.sendText(
-              message.from,
-              respuesta + "\n✅ Escribí *menu* para volver al inicio."
-            );
-          } else {
-            await client.sendText(
-              message.from,
-              "👌 Perfecto. Si querés volver al menú principal, escribí *menu*."
-            );
-          }
-          estadoConversacion.delete(message.from);
-          return;
-        }
-      }
-
-      // =======================================================
       // 🅲 OPCIÓN C – MESAS OCUPADAS
       // =======================================================
       if (texto === "c" || (texto.includes("mesa") && texto.includes("ocup"))) {
@@ -289,11 +264,36 @@ function iniciarBot(client, id) {
       }
 
       // =======================================================
-      // 🔁 RESPUESTA A/B – DETALLE MESAS
+      // 🔁 RESPUESTAS A/B (UNIFICADO SEGÚN CONTEXTO)
       // =======================================================
       if (["a", "b", "si", "sí", "no"].includes(texto)) {
         const contexto = estadoConversacion.get(message.from);
-        if (contexto?.tipo === "mesasOcupadas") {
+        if (!contexto) return;
+
+        // 🔹 FACTURACIÓN HOY
+        if (contexto.tipo === "facturacionHoy") {
+          if (texto.startsWith("a") || texto.startsWith("s")) {
+            let respuesta = "👨‍🍳 *Detalle de ventas por mozo:*\n";
+            for (const [mozo, monto] of Object.entries(contexto.porMozo)) {
+              respuesta += `• ${mozo}: $${monto.toLocaleString("es-AR")}\n`;
+            }
+            respuesta += `\n💰 *Total general:* $${contexto.total.toLocaleString("es-AR")}\n`;
+            await client.sendText(
+              message.from,
+              respuesta + "\n✅ Escribí *menu* para volver al inicio."
+            );
+          } else {
+            await client.sendText(
+              message.from,
+              "👌 Perfecto. Si querés volver al menú principal, escribí *menu*."
+            );
+          }
+          estadoConversacion.delete(message.from);
+          return;
+        }
+
+        // 🔹 MESAS OCUPADAS
+        if (contexto.tipo === "mesasOcupadas") {
           if (texto.startsWith("a") || texto.startsWith("s")) {
             let respuesta = "📋 *Detalle de mesas actualmente ocupadas:*\n\n";
             contexto.datos.forEach((m) => {
