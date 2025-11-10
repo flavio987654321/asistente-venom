@@ -154,35 +154,40 @@ function iniciarBot(client, id) {
         return;
       }
 
-      // Función auxiliar para buscar por idMenu, menuId o idRestaurante
-      async function buscarPedidosPorEstadoYFecha(estado, desde, hasta) {
-        const pedidosRef = db.collection("pedidos_restaurante");
-        let pedidos = await pedidosRef
-          .where("idMenu", "==", id)
-          .where("estado", "==", estado)
-          .where("finalizado", ">=", desde)
-          .where("finalizado", "<", hasta)
-          .get();
+       // Función auxiliar para buscar por idMenu, menuId o idRestaurante
+async function buscarPedidosPorEstadoYFecha(estado, desde, hasta) {
+  const pedidosRef = db.collection("pedidos_restaurante");
 
-        if (pedidos.empty) {
-          pedidos = await pedidosRef
-            .where("menuId", "==", id)
-            .where("estado", "==", estado)
-            .where("finalizado", ">=", desde)
-            .where("finalizado", "<", hasta)
-            .get();
-        }
-        if (pedidos.empty) {
-          pedidos = await pedidosRef
-            .where("idRestaurante", "==", id)
-            .where("estado", "==", estado)
-            .where("finalizado", ">=", desde)
-            .where("finalizado", "<", hasta)
-            .get();
-        }
+  // 🔍 Primero probamos con menuId (tu campo real)
+  let pedidos = await pedidosRef
+    .where("menuId", "==", id)
+    .where("estado", "==", estado)
+    .where("finalizado", ">=", desde)
+    .where("finalizado", "<", hasta)
+    .get();
 
-        return pedidos;
-      }
+  // 🔄 Si no hay resultados, probamos con idMenu
+  if (pedidos.empty) {
+    pedidos = await pedidosRef
+      .where("idMenu", "==", id)
+      .where("estado", "==", estado)
+      .where("finalizado", ">=", desde)
+      .where("finalizado", "<", hasta)
+      .get();
+  }
+
+  // 🔁 Si tampoco hay, probamos con idRestaurante
+  if (pedidos.empty) {
+    pedidos = await pedidosRef
+      .where("idRestaurante", "==", id)
+      .where("estado", "==", estado)
+      .where("finalizado", ">=", desde)
+      .where("finalizado", "<", hasta)
+      .get();
+  }
+
+  return pedidos;
+}
 
       // === 1️⃣ FACTURACIÓN DE HOY ===
       if (texto.includes("factur") && texto.includes("hoy")) {
@@ -247,6 +252,27 @@ function iniciarBot(client, id) {
             .get();
         }
 
+        // 🔁 Si aún no hay resultados, buscar mesas por pedidos activos
+if (mesas.empty) {
+  const pedidosRef = db.collection("pedidos_restaurante");
+  const activos = await pedidosRef
+    .where("menuId", "==", id)
+    .where("estado", "in", ["activo", "pendiente"])
+    .get();
+
+  if (!activos.empty) {
+    const mesasSet = new Set();
+    activos.forEach(doc => {
+      const mesa = doc.data().mesa;
+      if (mesa) mesasSet.add(mesa);
+    });
+    return await client.sendText(
+      message.from,
+      `🍽️ Hay *${mesasSet.size}* mesas ocupadas ahora mismo.`
+    );
+  }
+}
+
         await client.sendText(
           message.from,
           mesas.empty
@@ -258,11 +284,24 @@ function iniciarBot(client, id) {
 
       // === 4️⃣ PEDIDOS ACTIVOS ===
       if (texto.includes("pedido") && texto.includes("activo")) {
-        const pedidosRef = db.collection("pedidos_restaurante");
-        let activos = await pedidosRef
-          .where("idMenu", "==", id)
-          .where("estado", "==", "activo")
-          .get();
+      const pedidosRef = db.collection("pedidos_restaurante");
+let activos = await pedidosRef
+  .where("menuId", "==", id)
+  .where("estado", "in", ["activo", "pendiente"])
+  .get();
+
+if (activos.empty) {
+  activos = await pedidosRef
+    .where("idMenu", "==", id)
+    .where("estado", "in", ["activo", "pendiente"])
+    .get();
+}
+if (activos.empty) {
+  activos = await pedidosRef
+    .where("idRestaurante", "==", id)
+    .where("estado", "in", ["activo", "pendiente"])
+    .get();
+}
 
         if (activos.empty) {
           activos = await pedidosRef
