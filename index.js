@@ -226,6 +226,48 @@ function iniciarBot(client, id) {
           return;
         }
 
+        // 🅱️ OPCIÓN B – PEDIDOS ACTIVOS (con opción de ver detalle)
+        if (texto === "b" || (texto.includes("pedido") && texto.includes("activo"))) {
+          const pedidosRef = db.collection("pedidos_restaurante");
+          const snapshot = await pedidosRef
+            .where("idMenu", "==", id)
+            .where("estado", "in", ["activo", "pendiente", "en preparación"])
+            .get();
+
+          if (snapshot.empty) {
+            await client.sendText(
+              message.from,
+              "🕓 No hay pedidos activos en este momento. Todo está tranquilo. 😌"
+            );
+            return;
+          }
+
+          const letras = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("");
+          const pedidos = snapshot.docs.map((doc, i) => {
+            const data = doc.data();
+            return {
+              idPedido: doc.id,
+              letra: letras[i],
+              mesa: data.mesa || "—",
+              mozo: data.nombreMozo || "Sin asignar",
+              total: data.total || 0,
+            };
+          });
+
+          estadoConversacion.set(message.from, {
+            tipo: "pedidosActivos",
+            datos: pedidos,
+          });
+
+          let respuesta = "📦 *Pedidos activos:*\n\n";
+          pedidos.forEach((p) => {
+            respuesta += `${p.letra} – 🪑 Mesa ${p.mesa} — *${p.mozo}* — 💰 $${p.total.toLocaleString("es-AR")}\n`;
+          });
+          respuesta += "\n📋 Escribí la *letra* del pedido que querés ver en detalle.";
+          await client.sendText(message.from, respuesta);
+          return;
+        }
+
         // 🅲 OPCIÓN C – MESAS OCUPADAS
         if (texto === "c" || (texto.includes("mesa") && texto.includes("ocup"))) {
           const mesasRef = db.collection("mesas_restaurante");
@@ -263,86 +305,141 @@ function iniciarBot(client, id) {
           return;
         }
 
-        // 🅳 OPCIÓN D – MOZOS Y RENDIMIENTO (placeholder)
+        // 🅳 OPCIÓN D – MOZOS Y RENDIMIENTO (real)
         if (texto === "d" || texto.includes("mozo")) {
+          const hoy = new Date();
+          hoy.setHours(0, 0, 0, 0);
+          const mañana = new Date(hoy);
+          mañana.setDate(mañana.getDate() + 1);
+
+          const pedidosRef = db.collection("pedidos_restaurante");
+          const snapshot = await pedidosRef
+            .where("idMenu", "==", id)
+            .where("estado", "==", "pagado")
+            .where("finalizado", ">=", hoy)
+            .where("finalizado", "<", mañana)
+            .get();
+
+          if (snapshot.empty) {
+            await client.sendText(message.from, "👨‍🍳 Hoy no hay ventas registradas por los mozos.");
+            return;
+          }
+
+          const rendimiento = {};
+          snapshot.forEach((doc) => {
+            const data = doc.data();
+            const mozo = data.nombreMozo || "Sin asignar";
+            rendimiento[mozo] = (rendimiento[mozo] || 0) + (data.total || 0);
+          });
+
+          let respuesta = "👨‍🍳 *Rendimiento de mozos (hoy):*\n\n";
+          Object.entries(rendimiento).forEach(([mozo, total]) => {
+            respuesta += `• ${mozo}: 💰 $${total.toLocaleString("es-AR")}\n`;
+          });
+
           await client.sendText(
             message.from,
-            "👨‍🍳 Esta función mostrará pronto el rendimiento de mozos (en desarrollo)."
+            respuesta + "\n✅ Escribí *menu* para volver al inicio."
           );
           return;
         }
       }
 
       // =======================================================
-      // 🔁 RESPUESTAS A/B SECTORIZADAS POR CONTEXTO
+      // 🔁 RESPUESTAS POR CONTEXTO
       // =======================================================
-      if (["a", "b", "si", "sí", "no"].includes(texto)) {
-        const contexto = estadoConversacion.get(message.from);
-        if (!contexto) return;
-
-        switch (contexto.tipo) {
-          // 🔹 FACTURACIÓN HOY
-          case "facturacionHoy":
-            if (texto.startsWith("a") || texto.startsWith("s")) {
-              let respuesta = "👨‍🍳 *Detalle de ventas por mozo:*\n";
-              for (const [mozo, monto] of Object.entries(contexto.porMozo)) {
-                respuesta += `• ${mozo}: $${monto.toLocaleString("es-AR")}\n`;
-              }
-              respuesta += `\n💰 *Total general:* $${contexto.total.toLocaleString("es-AR")}\n`;
-              await client.sendText(
-                message.from,
-                respuesta + "\n✅ Escribí *menu* para volver al inicio."
-              );
-            } else {
-              await client.sendText(
-                message.from,
-                "👌 Perfecto. Escribí *menu* para volver al inicio."
-              );
-            }
-            estadoConversacion.delete(message.from);
-            break;
-
-          // 🔹 MESAS OCUPADAS
-          case "mesasOcupadas":
-            if (texto.startsWith("a") || texto.startsWith("s")) {
-              let respuesta = "📋 *Detalle de mesas actualmente ocupadas:*\n\n";
-              contexto.datos.forEach((m) => {
-                let tiempo = "";
-                if (m.hora?.seconds) {
-                  const minutos = Math.floor(
-                    (Date.now() - new Date(m.hora.seconds * 1000)) / 60000
-                  );
-                  const horas = Math.floor(minutos / 60);
-                  const minRest = minutos % 60;
-                  tiempo =
-                    horas > 0
-                      ? ` (hace ${horas}h ${minRest}min)`
-                      : ` (hace ${minRest} min)`;
-                }
-                respuesta += `• 🪑 Mesa ${m.mesa} — *${m.mozo}*${tiempo}\n`;
-              });
-              await client.sendText(
-                message.from,
-                respuesta + "\n✅ Escribí *menu* para volver al inicio."
-              );
-            } else {
-              await client.sendText(
-                message.from,
-                "👌 Perfecto. Escribí *menu* para volver al inicio."
-              );
-            }
-            estadoConversacion.delete(message.from);
-            break;
-
-          default:
+      const contexto = estadoConversacion.get(message.from);
+      if (contexto) {
+        // 🔹 PEDIDOS ACTIVOS – Ver detalle
+        if (contexto.tipo === "pedidosActivos") {
+          const letraElegida = texto.toUpperCase();
+          const pedidoSeleccionado = contexto.datos.find((p) => p.letra === letraElegida);
+          if (!pedidoSeleccionado) {
             await client.sendText(
               message.from,
-              "🤖 No entiendo esa opción. Escribí *menu* para volver al inicio."
+              "⚠️ No reconozco esa letra. Escribí una válida o *menu* para volver."
             );
-            estadoConversacion.delete(message.from);
-            break;
+            return;
+          }
+
+          const pedidoDoc = await db
+            .collection("pedidos_restaurante")
+            .doc(pedidoSeleccionado.idPedido)
+            .get();
+          if (!pedidoDoc.exists) {
+            await client.sendText(message.from, "❌ No se encontró el detalle del pedido.");
+            return;
+          }
+
+          const pedido = pedidoDoc.data();
+          const productos = pedido.items || [];
+
+          let detalle = `🪑 *Mesa ${pedido.mesa || "—"}* — Mozo: *${pedido.nombreMozo || "Sin asignar"}*\n\n`;
+          if (productos.length > 0) {
+            detalle += "🍽️ *Productos:*\n";
+            productos.forEach((prod) => {
+              detalle += `• ${prod.nombre || "Producto"} – $${prod.precio?.toLocaleString("es-AR") || 0}\n`;
+            });
+          } else {
+            detalle += "📭 No hay productos cargados para este pedido.\n";
+          }
+          detalle += `\n💰 *Total:* $${(pedido.total || 0).toLocaleString(
+            "es-AR"
+          )}\n\n✅ Escribí *menu* para volver al inicio.`;
+
+          await client.sendText(message.from, detalle);
+          estadoConversacion.delete(message.from);
+          return;
         }
-        return;
+
+        // 🔹 FACTURACIÓN HOY
+        if (contexto.tipo === "facturacionHoy") {
+          if (texto.startsWith("a") || texto.startsWith("s")) {
+            let respuesta = "👨‍🍳 *Detalle de ventas por mozo:*\n";
+            for (const [mozo, monto] of Object.entries(contexto.porMozo)) {
+              respuesta += `• ${mozo}: $${monto.toLocaleString("es-AR")}\n`;
+            }
+            respuesta += `\n💰 *Total general:* $${contexto.total.toLocaleString("es-AR")}\n`;
+            await client.sendText(
+              message.from,
+              respuesta + "\n✅ Escribí *menu* para volver al inicio."
+            );
+          } else {
+            await client.sendText(message.from, "👌 Perfecto. Escribí *menu* para volver al inicio.");
+          }
+          estadoConversacion.delete(message.from);
+          return;
+        }
+
+        // 🔹 MESAS OCUPADAS
+        if (contexto.tipo === "mesasOcupadas") {
+          if (texto.startsWith("a") || texto.startsWith("s")) {
+            let respuesta = "📋 *Detalle de mesas actualmente ocupadas:*\n\n";
+            contexto.datos.forEach((m) => {
+              let tiempo = "";
+              if (m.hora?.seconds) {
+                const minutos = Math.floor(
+                  (Date.now() - new Date(m.hora.seconds * 1000)) / 60000
+                );
+                const horas = Math.floor(minutos / 60);
+                const minRest = minutos % 60;
+                tiempo =
+                  horas > 0
+                    ? ` (hace ${horas}h ${minRest}min)`
+                    : ` (hace ${minRest} min)`;
+              }
+              respuesta += `• 🪑 Mesa ${m.mesa} — *${m.mozo}*${tiempo}\n`;
+            });
+            await client.sendText(
+              message.from,
+              respuesta + "\n✅ Escribí *menu* para volver al inicio."
+            );
+          } else {
+            await client.sendText(message.from, "👌 Perfecto. Escribí *menu* para volver al inicio.");
+          }
+          estadoConversacion.delete(message.from);
+          return;
+        }
       }
 
       // =======================================================
@@ -370,10 +467,7 @@ function iniciarBot(client, id) {
       );
     } catch (err) {
       console.error(`⚠️ Error procesando mensaje en ${id}:`, err);
-      await client.sendText(
-        message.from,
-        "⚠️ Ocurrió un error procesando la consulta."
-      );
+      await client.sendText(message.from, "⚠️ Ocurrió un error procesando la consulta.");
     }
   });
 }
