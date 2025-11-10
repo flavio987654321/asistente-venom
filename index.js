@@ -149,10 +149,30 @@ function iniciarBot(client, id) {
       const texto = (message.body || "").toLowerCase().trim();
 
       // === SALUDO ===
-      if (texto.includes("hola")) {
-        await client.sendText(message.from, `👋 Hola! Soy el asistente virtual de ${id}.`);
-        return;
-      }
+if (texto.includes("hola")) {
+  // Buscar el nombre del restaurante desde Firestore
+  let nombreRestaurante = "nuestro restaurante 🍽️";
+  try {
+    const doc = await db.collection("menus").doc(id).get();
+    if (doc.exists && doc.data().nombre) {
+      nombreRestaurante = doc.data().nombre;
+    }
+  } catch (e) {
+    console.warn("No se pudo obtener el nombre del restaurante:", e.message);
+  }
+
+  const mensajesSaludo = [
+    `👋 ¡Hola! Soy el asistente virtual de *${nombreRestaurante}*. ¿En qué puedo ayudarte hoy? 😊`,
+    `🍽️ ¡Bienvenido a *${nombreRestaurante}*! Soy tu asistente virtual, listo para ayudarte.`,
+    `🙌 ¡Hola! Gracias por comunicarte con *${nombreRestaurante}*. ¿Querés saber las mesas ocupadas, pedidos o ventas de hoy?`
+  ];
+
+  // Elegir uno al azar para hacerlo más humano
+  const saludoElegido = mensajesSaludo[Math.floor(Math.random() * mensajesSaludo.length)];
+
+  await client.sendText(message.from, saludoElegido);
+  return;
+}
 
        // Función auxiliar para buscar por idMenu, menuId o idRestaurante
 async function buscarPedidosPorEstadoYFecha(estado, desde, hasta) {
