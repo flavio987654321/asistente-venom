@@ -395,22 +395,30 @@ if (productos.length === 0 && Array.isArray(pedido.items)) {
 let detalle = `🪑 *Mesa ${pedido.mesa || "—"}* — Mozo: *${pedido.nombreMozo || "Sin asignar"}*\n\n`;
 
 if (productos.length > 0) {
-  detalle += "🍽️ *Productos:*\n";
+  // 📦 Agrupar productos por categoría
+  const porCategoria = {};
   productos.forEach((prod) => {
-    const nombre = prod.nombre || "Producto sin nombre";
-    const categoria = prod.categoria ? ` (${prod.categoria})` : "";
-    const precio = prod.precio ? prod.precio.toLocaleString("es-AR") : "0";
-    detalle += `• ${nombre}${categoria} – $${precio}\n`;
+    const categoria = prod.categoria || "Sin categoría";
+    if (!porCategoria[categoria]) porCategoria[categoria] = [];
+    porCategoria[categoria].push(prod);
   });
+
+  detalle += "🍽️ *Productos:*\n";
+  for (const [categoria, lista] of Object.entries(porCategoria)) {
+    detalle += `\n📂 *${categoria.toUpperCase()}*\n`;
+    lista.forEach((prod) => {
+      const nombre = prod.nombre || "Producto sin nombre";
+      const precio = prod.precio ? prod.precio.toLocaleString("es-AR") : "0";
+      detalle += `• ${nombre} – $${precio}\n`;
+    });
+  }
 } else {
   detalle += "📭 No hay productos cargados para este pedido.\n";
 }
 
 const total = pedido.total || productos.reduce((sum, p) => sum + (p.precio || 0), 0);
 
-detalle += `\n💰 *Total:* $${total.toLocaleString(
-  "es-AR"
-)}\n\n✅ Escribí *menu* para volver al inicio.`;
+detalle += `\n💰 *Total:* $${total.toLocaleString("es-AR")}\n\n✅ Escribí *menu* para volver al inicio.`;
 
           await client.sendText(message.from, detalle);
           estadoConversacion.delete(message.from);
