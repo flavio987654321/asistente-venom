@@ -177,90 +177,100 @@ function iniciarBot(client, id) {
       }
 
       // =======================================================
-      // 🅰️ OPCIÓN A – FACTURACIÓN DEL DÍA
+      // 🅰️ 🅱️ 🅲 🅳 OPCIONES PRINCIPALES (solo si no hay contexto activo)
       // =======================================================
-      if (texto === "a" || (texto.includes("factur") && texto.includes("hoy"))) {
-        const hoy = new Date();
-        hoy.setHours(0, 0, 0, 0);
-        const mañana = new Date(hoy);
-        mañana.setDate(mañana.getDate() + 1);
+      const contextoActivo = estadoConversacion.get(message.from);
+      if (!contextoActivo) {
+        // 🅰️ OPCIÓN A – FACTURACIÓN DEL DÍA
+        if (texto === "a" || (texto.includes("factur") && texto.includes("hoy"))) {
+          const hoy = new Date();
+          hoy.setHours(0, 0, 0, 0);
+          const mañana = new Date(hoy);
+          mañana.setDate(mañana.getDate() + 1);
 
-        const pedidosRef = db.collection("pedidos_restaurante");
-        const pedidos = await pedidosRef
-          .where("idMenu", "==", id)
-          .where("estado", "==", "pagado")
-          .where("finalizado", ">=", hoy)
-          .where("finalizado", "<", mañana)
-          .get();
+          const pedidosRef = db.collection("pedidos_restaurante");
+          const pedidos = await pedidosRef
+            .where("idMenu", "==", id)
+            .where("estado", "==", "pagado")
+            .where("finalizado", ">=", hoy)
+            .where("finalizado", "<", mañana)
+            .get();
 
-        if (pedidos.empty) {
-          await client.sendText(message.from, "📊 No hay ventas registradas hoy.");
-          return;
-        }
+          if (pedidos.empty) {
+            await client.sendText(message.from, "📊 No hay ventas registradas hoy.");
+            return;
+          }
 
-        // Calcular total y agrupar por mozo
-        let total = 0;
-        const porMozo = {};
-        pedidos.forEach((doc) => {
-          const data = doc.data();
-          total += data.total || 0;
-          const mozo = data.nombreMozo || "Desconocido";
-          porMozo[mozo] = (porMozo[mozo] || 0) + (data.total || 0);
-        });
+          let total = 0;
+          const porMozo = {};
+          pedidos.forEach((doc) => {
+            const data = doc.data();
+            total += data.total || 0;
+            const mozo = data.nombreMozo || "Desconocido";
+            porMozo[mozo] = (porMozo[mozo] || 0) + (data.total || 0);
+          });
 
-        estadoConversacion.set(message.from, {
-          tipo: "facturacionHoy",
-          total,
-          porMozo,
-        });
+          estadoConversacion.set(message.from, {
+            tipo: "facturacionHoy",
+            total,
+            porMozo,
+          });
 
-        await client.sendText(
-          message.from,
-          `📊 *Facturación de hoy: $${total.toLocaleString("es-AR")}* (${pedidos.size} pedidos)\n\n` +
-            "¿Deseás ver el detalle por mozo?\n\n" +
-            "A – Sí, mostrar detalle\n" +
-            "B – No, volver al menú principal"
-        );
-        return;
-      }
-
-      // =======================================================
-      // 🅲 OPCIÓN C – MESAS OCUPADAS
-      // =======================================================
-      if (texto === "c" || (texto.includes("mesa") && texto.includes("ocup"))) {
-        const mesasRef = db.collection("mesas_restaurante");
-        const snapshot = await mesasRef
-          .where("menuId", "==", id)
-          .where("estado", "in", ["OCUPADA", "ocupada"])
-          .get();
-
-        if (snapshot.empty) {
           await client.sendText(
             message.from,
-            "🍽️ Actualmente no hay mesas ocupadas. Todo está disponible. ✅"
+            `📊 *Facturación de hoy: $${total.toLocaleString("es-AR")}* (${pedidos.size} pedidos)\n\n` +
+              "¿Deseás ver el detalle por mozo?\n\n" +
+              "A – Sí, mostrar detalle\n" +
+              "B – No, volver al menú principal"
           );
           return;
         }
 
-        const cantidad = snapshot.size;
-        estadoConversacion.set(message.from, {
-          tipo: "mesasOcupadas",
-          datos: snapshot.docs.map((doc) => ({
-            mesa: doc.data().mesa,
-            mozo: doc.data().mozoNombre || "Sin asignar",
-            hora: doc.data().timestamp,
-          })),
-        });
+        // 🅲 OPCIÓN C – MESAS OCUPADAS
+        if (texto === "c" || (texto.includes("mesa") && texto.includes("ocup"))) {
+          const mesasRef = db.collection("mesas_restaurante");
+          const snapshot = await mesasRef
+            .where("menuId", "==", id)
+            .where("estado", "in", ["OCUPADA", "ocupada"])
+            .get();
 
-        await client.sendText(
-          message.from,
-          `🍽️ En este momento hay *${cantidad}* mesa${
-            cantidad > 1 ? "s" : ""
-          } ocupada${
-            cantidad > 1 ? "s" : ""
-          }.\n¿Deseás que te detalle quién las atiende?\n\nA – Sí, mostrar detalle\nB – No, volver al menú principal`
-        );
-        return;
+          if (snapshot.empty) {
+            await client.sendText(
+              message.from,
+              "🍽️ Actualmente no hay mesas ocupadas. Todo está disponible. ✅"
+            );
+            return;
+          }
+
+          const cantidad = snapshot.size;
+          estadoConversacion.set(message.from, {
+            tipo: "mesasOcupadas",
+            datos: snapshot.docs.map((doc) => ({
+              mesa: doc.data().mesa,
+              mozo: doc.data().mozoNombre || "Sin asignar",
+              hora: doc.data().timestamp,
+            })),
+          });
+
+          await client.sendText(
+            message.from,
+            `🍽️ En este momento hay *${cantidad}* mesa${
+              cantidad > 1 ? "s" : ""
+            } ocupada${
+              cantidad > 1 ? "s" : ""
+            }.\n¿Deseás que te detalle quién las atiende?\n\nA – Sí, mostrar detalle\nB – No, volver al menú principal`
+          );
+          return;
+        }
+
+        // 🅳 OPCIÓN D – MOZOS Y RENDIMIENTO (placeholder)
+        if (texto === "d" || texto.includes("mozo")) {
+          await client.sendText(
+            message.from,
+            "👨‍🍳 Esta función mostrará pronto el rendimiento de mozos (en desarrollo)."
+          );
+          return;
+        }
       }
 
       // =======================================================
