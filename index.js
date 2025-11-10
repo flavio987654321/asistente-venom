@@ -142,231 +142,220 @@ if (fs.existsSync(`${pathTokens}/session.data.json`) || fs.existsSync(`${pathTok
 function iniciarBot(client, id) {
   console.log(`✅ Bot iniciado correctamente para restaurante ${id}`);
 
+  // 🧠 Estado temporal de conversación por número
+  const estadoConversacion = new Map();
+
   client.onMessage(async (message) => {
     try {
       if (message.isGroupMsg || message.fromMe) return;
-
       const texto = (message.body || "").toLowerCase().trim();
 
-      // === SALUDO ===
-if (texto.includes("hola")) {
-  // Buscar el nombre del restaurante desde Firestore
-  let nombreRestaurante = "nuestro restaurante 🍽️";
-  try {
-    const doc = await db.collection("menus").doc(id).get();
-    if (doc.exists && doc.data().nombre) {
-      nombreRestaurante = doc.data().nombre;
-    }
-  } catch (e) {
-    console.warn("No se pudo obtener el nombre del restaurante:", e.message);
-  }
+      // =======================================================
+      // 📋 MENÚ PRINCIPAL (A/B/C/D)
+      // =======================================================
+      if (["hola", "menu", "menú", "inicio"].includes(texto)) {
+        let nombreRestaurante = "tu restaurante 🍽️";
+        try {
+          const doc = await db.collection("menus").doc(id).get();
+          if (doc.exists && doc.data().nombre) nombreRestaurante = doc.data().nombre;
+        } catch (e) {
+          console.warn("⚠️ No se pudo obtener el nombre:", e.message);
+        }
+      await client.sendText(
+  message.from,
+  `👋 ¡Hola! Soy el asistente virtual de *${nombreRestaurante}*.\n` +
+    "Puedo brindarte información actualizada del restaurante:\n\n" +
+    "A – 📊 Facturación del día\n" +
+    "B – 🕓 Pedidos activos\n" +
+    "C – 🍽️ Mesas ocupadas\n" +
+    "D – 👨‍🍳 Mozos y rendimiento\n\n" +
+    "Escribí la *letra* o el *nombre del comando* para continuar."
+);
+        return;
+      }
 
-  const mensajesSaludo = [
-    `👋 ¡Hola! Soy el asistente virtual de *${nombreRestaurante}*. ¿En qué puedo ayudarte hoy? 😊`,
-    `🍽️ ¡Bienvenido a *${nombreRestaurante}*! Soy tu asistente virtual, listo para ayudarte.`,
-    `🙌 ¡Hola! Gracias por comunicarte con *${nombreRestaurante}*. ¿Querés saber las mesas ocupadas, pedidos o ventas de hoy?`
-  ];
-
-  // Elegir uno al azar para hacerlo más humano
-  const saludoElegido = mensajesSaludo[Math.floor(Math.random() * mensajesSaludo.length)];
-
-  await client.sendText(message.from, saludoElegido);
-  return;
-}
-
-       // Función auxiliar para buscar por idMenu, menuId o idRestaurante
-async function buscarPedidosPorEstadoYFecha(estado, desde, hasta) {
-  const pedidosRef = db.collection("pedidos_restaurante");
-
-  // 🔍 Primero probamos con menuId (tu campo real)
-  let pedidos = await pedidosRef
-    .where("menuId", "==", id)
-    .where("estado", "==", estado)
-    .where("finalizado", ">=", desde)
-    .where("finalizado", "<", hasta)
-    .get();
-
-  // 🔄 Si no hay resultados, probamos con idMenu
-  if (pedidos.empty) {
-    pedidos = await pedidosRef
-      .where("idMenu", "==", id)
-      .where("estado", "==", estado)
-      .where("finalizado", ">=", desde)
-      .where("finalizado", "<", hasta)
-      .get();
-  }
-
-  // 🔁 Si tampoco hay, probamos con idRestaurante
-  if (pedidos.empty) {
-    pedidos = await pedidosRef
-      .where("idRestaurante", "==", id)
-      .where("estado", "==", estado)
-      .where("finalizado", ">=", desde)
-      .where("finalizado", "<", hasta)
-      .get();
-  }
-
-  return pedidos;
-}
-
-      // === 1️⃣ FACTURACIÓN DE HOY ===
-      if (texto.includes("factur") && texto.includes("hoy")) {
+      // =======================================================
+      // 🅰️ OPCIÓN A – FACTURACIÓN DEL DÍA
+      // =======================================================
+      if (texto === "a" || (texto.includes("factur") && texto.includes("hoy"))) {
         const hoy = new Date();
         hoy.setHours(0, 0, 0, 0);
         const mañana = new Date(hoy);
         mañana.setDate(mañana.getDate() + 1);
 
-        const pedidos = await buscarPedidosPorEstadoYFecha("pagado", hoy, mañana);
+        const pedidosRef = db.collection("pedidos_restaurante");
+        const pedidos = await pedidosRef
+          .where("idMenu", "==", id)
+          .where("estado", "==", "pagado")
+          .where("finalizado", ">=", hoy)
+          .where("finalizado", "<", mañana)
+          .get();
 
+        if (pedidos.empty) {
+          await client.sendText(message.from, "📊 No hay ventas registradas hoy.");
+          return;
+        }
+
+        // Calcular total y agrupar por mozo
         let total = 0;
-        pedidos.forEach((doc) => total += doc.data().total || 0);
+        const porMozo = {};
+        pedidos.forEach((doc) => {
+          const data = doc.data();
+          total += data.total || 0;
+          const mozo = data.nombreMozo || "Desconocido";
+          porMozo[mozo] = (porMozo[mozo] || 0) + (data.total || 0);
+        });
+
+        estadoConversacion.set(message.from, {
+          tipo: "facturacionHoy",
+          total,
+          porMozo,
+        });
 
         await client.sendText(
           message.from,
-          pedidos.empty
-            ? "📊 No hay ventas registradas hoy."
-            : `📊 Facturación de hoy: *$${total.toLocaleString("es-AR")}* (${pedidos.size} pedidos)`
+          `📊 *Facturación de hoy: $${total.toLocaleString("es-AR")}* (${pedidos.size} pedidos)\n\n` +
+            "¿Deseás ver el detalle por mozo?\n\n" +
+            "A – Sí, mostrar detalle\n" +
+            "B – No, volver al menú principal"
         );
         return;
       }
 
-      // === 2️⃣ FACTURACIÓN DE AYER ===
-      if (texto.includes("factur") && texto.includes("ayer")) {
-        const hoy = new Date();
-        hoy.setHours(0, 0, 0, 0);
-        const ayer = new Date(hoy);
-        ayer.setDate(ayer.getDate() - 1);
-
-        const pedidos = await buscarPedidosPorEstadoYFecha("pagado", ayer, hoy);
-
-        let total = 0;
-        pedidos.forEach((doc) => total += doc.data().total || 0);
-
-        await client.sendText(
-          message.from,
-          pedidos.empty
-            ? "📉 No hubo ventas registradas ayer."
-            : `📉 Facturación de ayer: *$${total.toLocaleString("es-AR")}* (${pedidos.size} pedidos)`
-        );
-        return;
+      // =======================================================
+      // 🔁 RESPUESTA A – FACTURACIÓN DETALLE
+      // =======================================================
+      if (["a", "b", "si", "sí", "no"].includes(texto)) {
+        const contexto = estadoConversacion.get(message.from);
+        if (contexto?.tipo === "facturacionHoy") {
+          if (texto.startsWith("a") || texto.startsWith("s")) {
+            let respuesta = "👨‍🍳 *Detalle de ventas por mozo:*\n";
+            for (const [mozo, monto] of Object.entries(contexto.porMozo)) {
+              respuesta += `• ${mozo}: $${monto.toLocaleString("es-AR")}\n`;
+            }
+            respuesta += `\n💰 *Total general:* $${contexto.total.toLocaleString("es-AR")}\n`;
+            await client.sendText(
+              message.from,
+              respuesta + "\n✅ Escribí *menu* para volver al inicio."
+            );
+          } else {
+            await client.sendText(
+              message.from,
+              "👌 Perfecto. Si querés volver al menú principal, escribí *menu*."
+            );
+          }
+          estadoConversacion.delete(message.from);
+          return;
+        }
       }
 
-      // === 3️⃣ MESAS OCUPADAS ===
-      if (texto.includes("mesa") && texto.includes("ocup")) {
+      // =======================================================
+      // 🅲 OPCIÓN C – MESAS OCUPADAS
+      // =======================================================
+      if (texto === "c" || (texto.includes("mesa") && texto.includes("ocup"))) {
         const mesasRef = db.collection("mesas_restaurante");
-        let mesas = await mesasRef
+        const snapshot = await mesasRef
           .where("menuId", "==", id)
           .where("estado", "in", ["OCUPADA", "ocupada"])
           .get();
 
-        if (mesas.empty) {
-          mesas = await mesasRef
-            .where("idMenu", "==", id)
-            .where("estado", "in", ["OCUPADA", "ocupada"])
-            .get();
-        }
-        if (mesas.empty) {
-          mesas = await mesasRef
-            .where("idRestaurante", "==", id)
-            .where("estado", "in", ["OCUPADA", "ocupada"])
-            .get();
+        if (snapshot.empty) {
+          await client.sendText(
+            message.from,
+            "🍽️ Actualmente no hay mesas ocupadas. Todo está disponible. ✅"
+          );
+          return;
         }
 
-        // 🔁 Si aún no hay resultados, buscar mesas por pedidos activos
-if (mesas.empty) {
-  const pedidosRef = db.collection("pedidos_restaurante");
-  const activos = await pedidosRef
-    .where("menuId", "==", id)
-    .where("estado", "in", ["activo", "pendiente"])
-    .get();
-
-  if (!activos.empty) {
-    const mesasSet = new Set();
-    activos.forEach(doc => {
-      const mesa = doc.data().mesa;
-      if (mesa) mesasSet.add(mesa);
-    });
-    return await client.sendText(
-      message.from,
-      `🍽️ Hay *${mesasSet.size}* mesas ocupadas ahora mismo.`
-    );
-  }
-}
+        const cantidad = snapshot.size;
+        estadoConversacion.set(message.from, {
+          tipo: "mesasOcupadas",
+          datos: snapshot.docs.map((doc) => ({
+            mesa: doc.data().mesa,
+            mozo: doc.data().mozoNombre || "Sin asignar",
+            hora: doc.data().timestamp,
+          })),
+        });
 
         await client.sendText(
           message.from,
-          mesas.empty
-            ? "🍽️ No hay mesas ocupadas en este momento."
-            : `🍽️ Hay *${mesas.size}* mesas ocupadas ahora mismo.`
+          `🍽️ En este momento hay *${cantidad}* mesa${
+            cantidad > 1 ? "s" : ""
+          } ocupada${
+            cantidad > 1 ? "s" : ""
+          }.\n¿Deseás que te detalle quién las atiende?\n\nA – Sí, mostrar detalle\nB – No, volver al menú principal`
         );
         return;
       }
 
-      // === 4️⃣ PEDIDOS ACTIVOS ===
-      if (texto.includes("pedido") && texto.includes("activo")) {
-      const pedidosRef = db.collection("pedidos_restaurante");
-let activos = await pedidosRef
-  .where("menuId", "==", id)
-  .where("estado", "in", ["activo", "pendiente"])
-  .get();
-
-if (activos.empty) {
-  activos = await pedidosRef
-    .where("idMenu", "==", id)
-    .where("estado", "in", ["activo", "pendiente"])
-    .get();
-}
-if (activos.empty) {
-  activos = await pedidosRef
-    .where("idRestaurante", "==", id)
-    .where("estado", "in", ["activo", "pendiente"])
-    .get();
-}
-
-        if (activos.empty) {
-          activos = await pedidosRef
-            .where("menuId", "==", id)
-            .where("estado", "==", "activo")
-            .get();
+      // =======================================================
+      // 🔁 RESPUESTA A/B – DETALLE MESAS
+      // =======================================================
+      if (["a", "b", "si", "sí", "no"].includes(texto)) {
+        const contexto = estadoConversacion.get(message.from);
+        if (contexto?.tipo === "mesasOcupadas") {
+          if (texto.startsWith("a") || texto.startsWith("s")) {
+            let respuesta = "📋 *Detalle de mesas actualmente ocupadas:*\n\n";
+            contexto.datos.forEach((m) => {
+              let tiempo = "";
+              if (m.hora?.seconds) {
+                const minutos = Math.floor(
+                  (Date.now() - new Date(m.hora.seconds * 1000)) / 60000
+                );
+                const horas = Math.floor(minutos / 60);
+                const minRest = minutos % 60;
+                tiempo =
+                  horas > 0
+                    ? ` (hace ${horas}h ${minRest}min)`
+                    : ` (hace ${minRest} min)`;
+              }
+              respuesta += `• 🪑 Mesa ${m.mesa} — *${m.mozo}*${tiempo}\n`;
+            });
+            await client.sendText(
+              message.from,
+              respuesta +
+                "\n📊 Si querés, puedo mostrarte también *qué mozo facturó más hoy*.\n\nA – Mostrar ranking de mozos\nB – Volver al menú principal"
+            );
+          } else {
+            await client.sendText(
+              message.from,
+              "✅ Perfecto. Si querés volver al menú principal, escribí *menu*."
+            );
+          }
+          estadoConversacion.delete(message.from);
+          return;
         }
-        if (activos.empty) {
-          activos = await pedidosRef
-            .where("idRestaurante", "==", id)
-            .where("estado", "==", "activo")
-            .get();
-        }
-
-        await client.sendText(
-          message.from,
-          activos.empty
-            ? "🕓 No hay pedidos activos en este momento."
-            : `🕓 Hay *${activos.size}* pedidos activos.`
-        );
-        return;
       }
 
-      // === 5️⃣ AYUDA ===
+      // =======================================================
+      // 🆘 AYUDA GENERAL
+      // =======================================================
       if (texto.includes("ayuda")) {
         await client.sendText(
           message.from,
-          "🤖 Puedo responder a estos comandos:\n\n" +
-          "• facturó hoy\n" +
-          "• facturó ayer\n" +
-          "• mesas ocupadas\n" +
-          "• pedidos activos"
+          "🤖 Puedo ayudarte con:\n\n" +
+            "A – Facturación del día\n" +
+            "B – Pedidos activos\n" +
+            "C – Mesas ocupadas\n" +
+            "D – Mozos y rendimiento\n\n" +
+            "Escribí *menu* para volver al inicio."
         );
         return;
       }
 
-      // === DEFAULT ===
+      // =======================================================
+      // ❔ DEFAULT
+      // =======================================================
       await client.sendText(
         message.from,
-        "🤖 No entiendo ese comando todavía. Escribí *ayuda* para ver opciones disponibles."
+        "🤖 No entiendo ese comando todavía. Escribí *menu* para ver las opciones disponibles."
       );
-
     } catch (err) {
       console.error(`⚠️ Error procesando mensaje en ${id}:`, err);
-      await client.sendText(message.from, "⚠️ Ocurrió un error procesando la consulta.");
+      await client.sendText(
+        message.from,
+        "⚠️ Ocurrió un error procesando la consulta."
+      );
     }
   });
 }
