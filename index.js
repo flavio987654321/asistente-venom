@@ -371,21 +371,46 @@ function iniciarBot(client, id) {
             return;
           }
 
-          const pedido = pedidoDoc.data();
-          const productos = pedido.items || [];
+         const pedido = pedidoDoc.data();
 
-          let detalle = `🪑 *Mesa ${pedido.mesa || "—"}* — Mozo: *${pedido.nombreMozo || "Sin asignar"}*\n\n`;
-          if (productos.length > 0) {
-            detalle += "🍽️ *Productos:*\n";
-            productos.forEach((prod) => {
-              detalle += `• ${prod.nombre || "Producto"} – $${prod.precio?.toLocaleString("es-AR") || 0}\n`;
-            });
-          } else {
-            detalle += "📭 No hay productos cargados para este pedido.\n";
-          }
-          detalle += `\n💰 *Total:* $${(pedido.total || 0).toLocaleString(
-            "es-AR"
-          )}\n\n✅ Escribí *menu* para volver al inicio.`;
+// 🧩 Combinar todos los productos posibles (dinámico)
+let productos = [];
+
+// Agregar el campo principal "pedidos" si existe
+if (Array.isArray(pedido.pedidos)) productos.push(...pedido.pedidos);
+
+// Buscar automáticamente todos los campos que empiecen con "agregado"
+for (const [clave, valor] of Object.entries(pedido)) {
+  if (clave.toLowerCase().startsWith("agregado") && Array.isArray(valor)) {
+    productos.push(...valor);
+  }
+}
+
+// Fallback por compatibilidad (caso viejo con "items")
+if (productos.length === 0 && Array.isArray(pedido.items)) {
+  productos.push(...pedido.items);
+}
+
+// 🧾 Armar el mensaje
+let detalle = `🪑 *Mesa ${pedido.mesa || "—"}* — Mozo: *${pedido.nombreMozo || "Sin asignar"}*\n\n`;
+
+if (productos.length > 0) {
+  detalle += "🍽️ *Productos:*\n";
+  productos.forEach((prod) => {
+    const nombre = prod.nombre || "Producto sin nombre";
+    const categoria = prod.categoria ? ` (${prod.categoria})` : "";
+    const precio = prod.precio ? prod.precio.toLocaleString("es-AR") : "0";
+    detalle += `• ${nombre}${categoria} – $${precio}\n`;
+  });
+} else {
+  detalle += "📭 No hay productos cargados para este pedido.\n";
+}
+
+const total = pedido.total || productos.reduce((sum, p) => sum + (p.precio || 0), 0);
+
+detalle += `\n💰 *Total:* $${total.toLocaleString(
+  "es-AR"
+)}\n\n✅ Escribí *menu* para volver al inicio.`;
 
           await client.sendText(message.from, detalle);
           estadoConversacion.delete(message.from);
